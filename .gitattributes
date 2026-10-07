@@ -1,0 +1,5 @@
+# Exclude development-only files from `composer create-project` / dist zips.
+/.gitignore          export-ignore
+/.gitattributes      export-ignore
+/phpunit.xml.dist    export-ignore
+/tests               export-ignore

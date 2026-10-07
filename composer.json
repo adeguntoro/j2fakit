@@ -1,0 +1,44 @@
+{
+  "name": "adeguntoro/j2fakit",
+  "description": "2FA gate package: by default every route requires login+2FA, whitelist via config/path/exempt, safe JSON 401/403 for API/XHR.",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "adeguntoro"
+    }
+  ],
+  "require": {
+    "php": "^8.2",
+    "illuminate/support": "^10.0|^11.0|^12.0|^13.0",
+    "illuminate/http": "^10.0|^11.0|^12.0|^13.0",
+    "illuminate/routing": "^10.0|^11.0|^12.0|^13.0",
+    "illuminate/contracts": "^10.0|^11.0|^12.0|^13.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Adeguntoro\\J2FAKit\\": "src/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "Adeguntoro\\J2FAKit\\J2FAKitServiceProvider"
+      ]
+    }
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true,
+  "require-dev": {
+    "orchestra/testbench": "^8.0|^9.0|^10.0|^11.0",
+    "phpunit/phpunit": "^10.0|^11.0|^12.0"
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Adeguntoro\\J2FAKit\\Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "test": "phpunit"
+  }
+}
