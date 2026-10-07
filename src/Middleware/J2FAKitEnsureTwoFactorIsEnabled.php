@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
 
 class J2FAKitEnsureTwoFactorIsEnabled
@@ -92,11 +93,29 @@ class J2FAKitEnsureTwoFactorIsEnabled
         }
 
         $redirectRoute = config('j2fakit.redirect_to', '2fa.required');
-        if (is_string($redirectRoute) && Route::has($redirectRoute)) {
-            return redirect()->route($redirectRoute);
+
+        // The user is ALREADY authenticated at this point, so falling back to
+        // the login route would be a trap: /login carries the "guest"
+        // middleware, which redirects authenticated users back to their home
+        // route. The two redirects chase each other forever, the browser
+        // reports ERR_TOO_MANY_REDIRECTS, and nothing reaches the log.
+        //
+        // A missing target is a wiring mistake rather than a runtime
+        // condition, so fail loudly with the offending config key instead of
+        // guessing. Guests never reach this branch - they are handled above
+        // and still fall back to the login route normally.
+        if (! is_string($redirectRoute) || ! Route::has($redirectRoute)) {
+            throw new RuntimeException(
+                "J2FAKit: config('j2fakit.redirect_to') is "
+                .var_export($redirectRoute, true)
+                .' but no route with that name exists. Define that route, or '
+                .'point j2fakit.redirect_to at an existing route. Refusing to '
+                .'fall back to the login route because the user is already '
+                .'authenticated and that fallback loops forever.'
+            );
         }
 
-        return redirect($this->loginUrl());
+        return redirect()->route($redirectRoute);
     }
 
     /**

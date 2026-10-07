@@ -10,20 +10,98 @@ This package is a **gate only** — it does not install, publish or configure an
 |---|---|---|
 | Laravel 10/11/12/13 with `illuminate/*` | base framework | your app |
 | **Jetstream or Fortify** installed & published | actual 2FA enrolment, QR code, login challenge | **you install it** |
-| Fortify 2FA feature enabled (`'2fa' => true`) | creates the `two-factor.*` routes the config whitelists | **you enable it** |
+| Fortify 2FA feature enabled (`Features::twoFactorAuthentication()`) | creates the `two-factor.*` routes the config whitelists | **you enable it** |
 | `two_factor_secret` + `two_factor_confirmed_at` columns on `users` | the only signals the gate checks | Fortify migration |
-| Route named `2fa.required` (default `redirect_to`) | where unconfirmed users are sent | **you define it** |
+| Route named `2fa.required` (default `redirect_to`) — or repoint `redirect_to` | where unconfirmed users are sent | **you define it** |
 | `App\Livewire\TwoFactorRequired` component | renders the QR code page | **you create it** (this package only publishes its view) |
 
-> ⚠️ **Without Jetstream/Fortify this package will lock your app.** No user can ever have `two_factor_confirmed_at` set, so every logged-in user is redirected to `2fa.required` forever. If you have not finished the setup above, either do not append the middleware to the `web` group yet, or set `J2FAKIT_ENFORCED=false`.
+> ⚠️ **Without Jetstream/Fortify this package will lock your app.** No user can ever have `two_factor_confirmed_at` set, so every logged-in user is turned away — sent back to `2fa.required` forever if that route exists, or hitting a `RuntimeException` if it does not. If you have not finished the setup above, either do not append the middleware to the `web` group yet, or set `J2FAKIT_ENFORCED=false`.
+
+> ⚠️ **A missing `redirect_to` route throws instead of looping.** If an authenticated user has not confirmed 2FA and `config('j2fakit.redirect_to')` names a route that does not exist, the gate throws a `RuntimeException` naming the config key. It deliberately does **not** fall back to the login route: `/login` carries the `guest` middleware, which sends authenticated users straight back to the protected page — an infinite `ERR_TOO_MANY_REDIRECTS` loop with nothing in the log. Guests are unaffected and still fall back to login normally.
 
 This package never modifies Jetstream/Fortify files — publish and customize those in the host project as needed.
 
 ## Install
 
+### Already have Jetstream / Fortify working?
+
 ```bash
 composer require adeguntoro/j2fakit
 ```
+
+Skip ahead to [Publish](#publish).
+
+### Starting from scratch — installing Jetstream too
+
+This package is a **gate only**: it does not install 2FA. Jetstream (which
+brings Fortify along with it) is what provides the QR code, the enrolment UI,
+the login challenge and the `two-factor.*` routes. Both packages come in with a
+**single composer command**:
+
+```bash
+composer require laravel/jetstream adeguntoro/j2fakit
+```
+
+Then scaffold Jetstream itself:
+
+```bash
+php artisan jetstream:install livewire    # or: php artisan jetstream:install inertia
+```
+
+The stack argument is required — only `livewire` and `inertia` are accepted.
+Optional flags: `--teams`, `--api`, `--dark`, `--verification`, `--ssr`, `--pest`.
+
+It is interactive, and it does the heavy lifting for you:
+
+- publishes `config/fortify.php`, the Fortify support classes, and the
+  migrations that add `two_factor_secret` / `two_factor_confirmed_at`
+- registers `App\Providers\FortifyServiceProvider` in `bootstrap/app.php`
+- rewrites the Fortify home route from `/home` to `/dashboard`
+- installs Livewire `^3.6.4` (or Inertia `^2.0` + Ziggy), then runs
+  `npm install && npm run build` — you do **not** need a separate npm step
+
+> ⚠️ Near the end it asks *"New database migrations were added. Would you like
+> to re-run your migrations?"* and, if you accept, runs **`migrate:fresh --force`**
+> — which **drops every table in the database**. Answer **No** on an existing
+> database and run `php artisan migrate` yourself.
+
+> Composer cannot run `jetstream:install` on your behalf: a dependency's
+> `scripts` are ignored, only the *root* package's scripts execute. This step
+> is always manual.
+
+### Two settings to check before switching the gate on
+
+**1. Turn 2FA confirmation on** — `config/fortify.php`:
+
+```php
+'features' => [
+    // ...
+    Features::twoFactorAuthentication([
+        'confirm' => true,           // required by this package's defaults
+        'confirmPassword' => true,    // optional: re-ask for the password
+    ]),
+],
+```
+
+Fortify's published default is the bare `Features::twoFactorAuthentication()`,
+which leaves `confirm` **off**. In that mode nothing ever writes
+`two_factor_confirmed_at`, and since `j2fakit.require_confirmation` defaults to
+`true`, **every user would be locked out permanently**.
+
+If you would rather keep `confirm` off, set `'require_confirmation' => false`
+in `config/j2fakit.php` instead — then a stored `two_factor_secret` alone counts
+as enrolled.
+
+**2. Point `redirect_to` at a route that exists** — `config/j2fakit.php`:
+
+```php
+'redirect_to' => 'profile.show',    // default: '2fa.required'
+```
+
+The default `2fa.required` route does not exist in a fresh Jetstream install.
+When it is missing the gate throws a `RuntimeException` for authenticated users
+rather than falling back to `/login` (that fallback loops forever). Either
+define the route, or point this at an existing one such as `profile.show`.
 
 ## Publish
 
@@ -162,6 +240,8 @@ adding `->middleware('auth')` to the route if guests should not see it.
 'enabled' => env('J2FAKIT_ENFORCED', true),
 
 // Where an unconfirmed user is sent (route NAME, checked with Route::has()).
+// MUST exist: if it does not, the gate throws a RuntimeException for
+// authenticated users rather than looping through /login.
 'redirect_to' => '2fa.required',
 
 // Login destination: name first, plain path as fallback.

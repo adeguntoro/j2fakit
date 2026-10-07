@@ -4,6 +4,7 @@ namespace Adeguntoro\J2FAKit\Tests\Feature;
 
 use Adeguntoro\J2FAKit\Tests\Support\User;
 use Adeguntoro\J2FAKit\Tests\TestCase;
+use RuntimeException;
 
 class GateTest extends TestCase
 {
@@ -71,13 +72,58 @@ class GateTest extends TestCase
             ->assertJson(['message' => 'Two factor authentication has not been confirmed.']);
     }
 
-    public function test_unconfirmed_user_falls_back_to_login_when_2fa_route_missing(): void
+    public function test_missing_redirect_route_throws_instead_of_looping(): void
     {
+        // The old behaviour redirected an already-authenticated user to the
+        // login route, which has "guest" middleware and sends them straight
+        // back - an infinite redirect loop with nothing in the log. That is a
+        // wiring mistake, so the gate now refuses to guess.
+        $this->withoutExceptionHandling();
+
         config()->set('j2fakit.redirect_to', 'route.that.does.not.exist');
 
         $user = new User(['email' => 'c@example.com']);
 
-        $this->actingAs($user)->get('/dashboard')->assertRedirect(route('login'));
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage("config('j2fakit.redirect_to')");
+        $this->expectExceptionMessage('route.that.does.not.exist');
+
+        $this->actingAs($user)->get('/dashboard');
+    }
+
+    public function test_non_string_redirect_route_also_throws(): void
+    {
+        $this->withoutExceptionHandling();
+
+        config()->set('j2fakit.redirect_to', null);
+
+        $user = new User(['email' => 'c2@example.com']);
+
+        $this->expectException(RuntimeException::class);
+
+        $this->actingAs($user)->get('/dashboard');
+    }
+
+    public function test_guest_login_fallback_is_unaffected_by_missing_redirect_route(): void
+    {
+        // Guests never reach the guard: for them, login is the correct
+        // destination, so that path must keep working unchanged.
+        config()->set('j2fakit.redirect_to', 'route.that.does.not.exist');
+
+        $this->get('/dashboard')->assertRedirect(route('login'));
+    }
+
+    public function test_json_unconfirmed_response_is_unaffected_by_missing_redirect_route(): void
+    {
+        // The JSON branch never redirects, so a missing target cannot loop
+        // it - it keeps returning 403.
+        config()->set('j2fakit.redirect_to', 'route.that.does.not.exist');
+
+        $user = new User(['email' => 'c3@example.com']);
+
+        $this->actingAs($user)
+            ->getJson('/dashboard')
+            ->assertStatus(403);
     }
 
     // ------------------------------------------------------------------
