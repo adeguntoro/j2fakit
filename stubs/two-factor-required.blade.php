@@ -5,7 +5,8 @@
       max-w-xl 36rem (576px)
     Card padding is `p-6 sm:p-8`.
     The QR code size is NOT set here - it lives in the component at
-    App\Livewire\TwoFactorRequired::qrCodeSvg() via `new RendererStyle(200)`.
+    Adeguntoro\J2FAKit\Livewire\TwoFactorRequired::qrCodeSvg() via
+    `new RendererStyle(200)`.
 --}}
 
 <div class="flex items-start justify-center px-4 py-10 sm:py-16">
@@ -76,7 +77,7 @@
                 <p class="text-sm text-green-700 mb-3">Save these backup codes in a safe place. You can use them to access your account if you lose your device.</p>
 
                 <div class="bg-white p-3 rounded font-mono text-sm grid grid-cols-2 gap-2">
-                    @foreach ($this->user->twoFactorRecoveryCodes() as $recoveryCode)
+                    @foreach ($this->recoveryCodes as $recoveryCode)
                         <div>{{ $recoveryCode }}</div>
                     @endforeach
                 </div>
@@ -87,7 +88,7 @@
                     </x-button>
                 </x-confirms-password>
 
-                <a href="{{ route('dashboard') }}" class="block text-center mt-3 text-sm text-gray-600 hover:text-gray-900">
+                <a href="{{ $this->continueUrl }}" class="block text-center mt-3 text-sm text-gray-600 hover:text-gray-900">
                     Continue to Dashboard →
                 </a>
             </div>
@@ -98,7 +99,7 @@
 @script
     <script>
         Livewire.on('twoFactorConfirmed', () => {
-            window.location.href = @js(route('dashboard'));
+            window.location.href = @js($this->continueUrl);
         });
     </script>
 @endscript

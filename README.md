@@ -4,18 +4,21 @@ Simple package: by default **every web route** requires login + 2FA. Can be bypa
 
 ## Requirements
 
-This package is a **gate only** — it does not install, publish or configure any auth/2FA package. Set up the host app first:
+This package **installs the 2FA stack for you** — `composer require` pulls in
+`laravel/jetstream`, `laravel/fortify` and `livewire/livewire`, and the package
+ships the setup page. It does **not** run Jetstream's installer or migrations for
+you, so the host app still needs these:
 
 | Requirement | Why | Provided by |
 |---|---|---|
-| Laravel 10/11/12/13 with `illuminate/*` | base framework | your app |
-| **Jetstream or Fortify** installed & published | actual 2FA enrolment, QR code, login challenge | **you install it** |
-| Fortify 2FA feature enabled (`Features::twoFactorAuthentication()`) | creates the `two-factor.*` routes the config whitelists | **you enable it** |
+| Laravel 11/12/13 with `illuminate/*` | base framework | your app |
+| `php artisan jetstream:install livewire` | publishes `config/fortify.php`, the `two_factor_*` migrations, and the `x-button` / `x-confirms-password` Blade components the setup view renders | **you run it** |
+| Fortify 2FA feature enabled (`Features::twoFactorAuthentication(['confirm' => true])`) | writes `two_factor_confirmed_at` once the user scans the QR code | **you enable it** |
 | `two_factor_secret` + `two_factor_confirmed_at` columns on `users` | the only signals the gate checks | Fortify migration |
-| Route named `2fa.required` (default `redirect_to`) — or repoint `redirect_to` | where unconfirmed users are sent | **you define it** |
-| `App\Livewire\TwoFactorRequired` component | renders the QR code page | **you create it** (this package only publishes its view) |
+| Route named `2fa.required` (default `redirect_to`) | where unconfirmed users are sent | ✅ **auto-registered by this package** |
+| QR code / setup page component | renders the QR code, setup key and recovery codes | ✅ **shipped** — `Adeguntoro\J2FAKit\Livewire\TwoFactorRequired` |
 
-> ⚠️ **Without Jetstream/Fortify this package will lock your app.** No user can ever have `two_factor_confirmed_at` set, so every logged-in user is turned away — sent back to `2fa.required` forever if that route exists, or hitting a `RuntimeException` if it does not. If you have not finished the setup above, either do not append the middleware to the `web` group yet, or set `J2FAKIT_ENFORCED=false`.
+> ⚠️ **Composer installs Jetstream's code, not Jetstream's setup.** `composer require` already brings in `laravel/jetstream`, `laravel/fortify` and `livewire/livewire`, but nothing works until you run `php artisan jetstream:install livewire` — it publishes `config/fortify.php`, the `two_factor_*` migrations, the Blade components the setup view renders, and registers `App\Providers\FortifyServiceProvider`. Until then no user can ever have `two_factor_confirmed_at` set, so every logged-in user is sent back to `2fa.required` forever. Either do not append the middleware to the `web` group yet, or set `J2FAKIT_ENFORCED=false`.
 
 > ⚠️ **A missing `redirect_to` route throws instead of looping.** If an authenticated user has not confirmed 2FA and `config('j2fakit.redirect_to')` names a route that does not exist, the gate throws a `RuntimeException` naming the config key. It deliberately does **not** fall back to the login route: `/login` carries the `guest` middleware, which sends authenticated users straight back to the protected page — an infinite `ERR_TOO_MANY_REDIRECTS` loop with nothing in the log. Guests are unaffected and still fall back to login normally.
 
@@ -23,26 +26,25 @@ This package never modifies Jetstream/Fortify files — publish and customize th
 
 ## Install
 
-### Already have Jetstream / Fortify working?
+### Already ran `jetstream:install`?
 
 ```bash
 composer require adeguntoro/j2fakit
 ```
 
-Skip ahead to [Publish](#publish).
+`laravel/jetstream`, `laravel/fortify` and `livewire/livewire` are pulled in as
+dependencies — you never need to require them separately.
 
-### Starting from scratch — installing Jetstream too
+Skip ahead to [Two settings to check](#two-settings-to-check-before-switching-the-gate-on).
 
-This package is a **gate only**: it does not install 2FA. Jetstream (which
-brings Fortify along with it) is what provides the QR code, the enrolment UI,
-the login challenge and the `two-factor.*` routes. Both packages come in with a
-**single composer command**:
+### Starting from scratch
 
 ```bash
-composer require laravel/jetstream adeguntoro/j2fakit
+composer require adeguntoro/j2fakit
 ```
 
-Then scaffold Jetstream itself:
+Composer brings the 2FA stack in as dependencies, but you still have to
+scaffold Jetstream itself:
 
 ```bash
 php artisan jetstream:install livewire    # or: php artisan jetstream:install inertia
@@ -92,16 +94,80 @@ If you would rather keep `confirm` off, set `'require_confirmation' => false`
 in `config/j2fakit.php` instead — then a stored `two_factor_secret` alone counts
 as enrolled.
 
-**2. Point `redirect_to` at a route that exists** — `config/j2fakit.php`:
+**2. `redirect_to` resolves out of the box** — the package registers the
+`2fa.required` route itself, pointing at its own setup page:
 
 ```php
-'redirect_to' => 'profile.show',    // default: '2fa.required'
+'redirect_to' => '2fa.required',    // registered by this package
 ```
 
-The default `2fa.required` route does not exist in a fresh Jetstream install.
-When it is missing the gate throws a `RuntimeException` for authenticated users
-rather than falling back to `/login` (that fallback loops forever). Either
-define the route, or point this at an existing one such as `profile.show`.
+Two things to know:
+
+- If your app already defines a route named `2fa.required`, **yours wins** —
+  the package detects it after your routes have loaded and stays out of the way.
+- If you turn the page off with `'setup_page' => ['enabled' => false]`, the
+  package registers nothing, so `redirect_to` must name a route **you** define.
+  When it names a route that does not exist the gate throws a `RuntimeException`
+  for authenticated users rather than falling back to `/login` (that fallback
+  loops forever).
+
+## The bundled 2FA setup page
+
+`composer require` gives you a working QR-code page — no `App\Livewire\...`
+class to write. The package registers it automatically:
+
+| | Default |
+|---|---|
+| Route name | `2fa.required` |
+| Path | `/two-factor-required` |
+| Component | `Adeguntoro\J2FAKit\Livewire\TwoFactorRequired` |
+| Middleware | `['web', 'auth']` |
+| Env kill switch | `J2FAKIT_SETUP_PAGE` |
+
+It renders the QR code, the manual setup key, the verification input and the
+recovery codes, then carries the user on to `j2fakit.after_setup_route` once
+confirmed. It needs **no changes to your `User` model** — decrypting the secret
+and the recovery codes happens inside the component.
+
+Three ways to take control:
+
+**1. Just change where it lives** — config/j2fakit.php:
+
+```php
+'setup_page' => [
+    'enabled'    => env('J2FAKIT_SETUP_PAGE', true),
+    'path'       => '/scan-this-first',
+    'name'       => 'setup.2fa',
+    'middleware' => ['web', 'auth'],
+],
+```
+
+**2. Own route entirely (the kill switch)** — set `'enabled' => false` and
+register the component yourself, so path, name and middleware are all yours:
+
+```php
+// routes/web.php
+use Adeguntoro\J2FAKit\Livewire\TwoFactorRequired;
+
+Route::middleware(['web', 'auth'])->get('/two-factor-required', TwoFactorRequired::class)
+    ->name('2fa.required');
+```
+
+Keep `'web'` in the middleware: the component reads the signed-in user from the
+session, so without that group it renders as logged out.
+
+**3. Already have your own route named `2fa.required`?** Nothing to do. The
+package registers late, sees yours, and stays out of the way — it never shadows
+or duplicates a host route.
+
+To customize the look, publish the view:
+
+```bash
+php artisan vendor:publish --tag=views
+```
+
+That drops a copy at `resources/views/livewire/two-factor-required.blade.php`,
+which takes precedence over the packaged one automatically.
 
 ## Publish
 
@@ -242,7 +308,21 @@ adding `->middleware('auth')` to the route if guests should not see it.
 // Where an unconfirmed user is sent (route NAME, checked with Route::has()).
 // MUST exist: if it does not, the gate throws a RuntimeException for
 // authenticated users rather than looping through /login.
+// Registered by this package by default — see the setup page section above.
 'redirect_to' => '2fa.required',
+
+// Where the setup page sends the user once 2FA is confirmed (route NAME,
+// checked with Route::has(); falls back to the app root when missing).
+'after_setup_route' => 'dashboard',
+
+// The bundled QR-code page: kill switch, path, name and middleware.
+// 'enabled' => false registers nothing — you wire the component up yourself.
+'setup_page' => [
+    'enabled'    => env('J2FAKIT_SETUP_PAGE', true),
+    'path'       => '/two-factor-required',
+    'name'       => '2fa.required',
+    'middleware' => ['web', 'auth'],
+],
 
 // Login destination: name first, plain path as fallback.
 'login_route' => 'login',
@@ -267,3 +347,8 @@ API and XHR calls never receive an HTML redirect:
 - `'*'` in the whitelist bypasses ALL named routes (be careful).
 - Safe against login loops (Route::has guard + fallback), leading slash in whitelist_paths, garbage entries are skipped.
 - Custom view: publish `views` to override `resources/views/livewire/two-factor-required.blade.php`.
+- Bundled setup page: auto-registered as `2fa.required`; disable with `J2FAKIT_SETUP_PAGE=false` (or `setup_page.enabled => false`) and register the component yourself if you want full control.
+- Your `User` model stays stock — secret/recovery-code decryption and QR generation live in the component, not on the model.
+- Never overwrites a route you already defined with the same name.
+- Requires Laravel 11+ (Laravel 10 support was dropped when Jetstream became a hard dependency).
+- Tested with PHPUnit: 38 tests / 74 assertions covering the gate, the whitelist, setup-page registration and the component's secret handling.

@@ -20,6 +20,11 @@ abstract class TestCase extends Orchestra
     protected function getEnvironmentSetUp($app): void
     {
         $app['config']->set('app.key', 'base64:'.base64_encode(str_repeat('a', 32)));
+
+        // This suite defines its own 2fa.required route below, so the bundled
+        // setup page is switched off to keep the gate tests deterministic.
+        // SetupPageTest / SetupPageDisabledTest cover the auto-registration.
+        $app['config']->set('j2fakit.setup_page.enabled', false);
     }
 
     /**

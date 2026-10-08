@@ -65,6 +65,56 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Bundled 2FA setup page
+    |--------------------------------------------------------------------------
+    |
+    | The package ships a Livewire component
+    | (Adeguntoro\J2FAKit\Livewire\TwoFactorRequired) that renders the QR
+    | code, the manual setup key, the verification input and the recovery
+    | codes. When 'enabled' it is registered automatically, so the default
+    | redirect_to ("2fa.required") resolves out of the box.
+    |
+    | The route is registered LATE, after routes/web.php has loaded. If your
+    | app already defines a route with 'name', yours is kept and the package
+    | stays out of the way - no shadowing, no duplicate-name surprises.
+    |
+    | 'enabled' => false is the kill switch: the package registers nothing at
+    | all and you wire the component into routes/web.php yourself, which is
+    | how to get full control over the path, name and middleware:
+    |
+    |     Route::middleware(['web', 'auth'])->get('/two-factor-required',
+    |         \Adeguntoro\J2FAKit\Livewire\TwoFactorRequired::class
+    |     )->name('2fa.required');
+    |
+    | 'middleware' must keep a session-backed 'web' group and an auth check:
+    | the component reads the signed-in user from the session, so dropping
+    | 'web' would render it logged out.
+    |
+    */
+
+    'setup_page' => [
+        'enabled'    => env('J2FAKIT_SETUP_PAGE', true),
+        'path'       => '/two-factor-required',
+        'name'       => '2fa.required',
+        'middleware' => ['web', 'auth'],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Where the setup page sends the user afterwards
+    |--------------------------------------------------------------------------
+    |
+    | Route NAME behind the "Continue" link and the default for Livewire's
+    | redirectIntended(). Checked with Route::has(), so a host app without a
+    | route of that name degrades to the app root instead of throwing
+    | RouteNotFoundException after the user just finished scanning a QR code.
+    |
+    */
+
+    'after_setup_route' => 'dashboard',
+
+    /*
+    |--------------------------------------------------------------------------
     | Whitelisted routes -> PUBLIC (matched against the route NAME)
     |--------------------------------------------------------------------------
     |
