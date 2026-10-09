@@ -4,13 +4,19 @@ namespace Adeguntoro\J2FAKit\Tests;
 
 use Adeguntoro\J2FAKit\J2FAKitServiceProvider;
 use Adeguntoro\J2FAKit\Middleware\J2FAKitEnsureTwoFactorIsEnabled;
+use Livewire\LivewireServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
 
 abstract class TestCase extends Orchestra
 {
     protected function getPackageProviders($app): array
     {
-        return [J2FAKitServiceProvider::class];
+        // Livewire must boot for the same reason it does in a host app:
+        // LivewireServiceProvider::bootFeatures() -> ComponentHookRegistry::boot()
+        // -> SupportPageComponents::provide() registers the View 'layout' macro
+        // that the setup page's render() calls. Testbench does not discover it
+        // on its own.
+        return [J2FAKitServiceProvider::class, LivewireServiceProvider::class];
     }
 
     /**

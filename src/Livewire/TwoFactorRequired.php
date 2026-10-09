@@ -176,11 +176,29 @@ class TwoFactorRequired extends JetstreamTwoFactorForm
      */
     public function render()
     {
-        return view(
+        $view = view(
             view()->exists('livewire.two-factor-required')
                 ? 'livewire.two-factor-required'
                 : 'j2fakit::two-factor-required'
         );
+
+        // A route-mounted component renders inside a layout. Without this
+        // Livewire falls back to config('livewire.layout'), whose default is
+        // "components.layouts.app" - a path Jetstream never publishes - and the
+        // page dies with "layout view not found: [components.layouts.app]".
+        // Jetstream's layouts/app.blade.php is {{ $slot }}, which is exactly
+        // what ->layout() feeds.
+        //
+        // The explicit fallback matters: mergeConfigFrom() is a SHALLOW merge,
+        // so a config/j2fakit.php published before this key existed replaces the
+        // whole setup_page array and hides it. Arr::get still returns the
+        // default for a missing key, while an explicit null (defer to
+        // config('livewire.layout')) is preserved.
+        $layout = config('j2fakit.setup_page.layout', 'layouts.app');
+
+        return is_string($layout) && $layout !== ''
+            ? $view->layout($layout)
+            : $view;
     }
 
     /**

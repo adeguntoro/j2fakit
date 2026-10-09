@@ -57,4 +57,57 @@ class SetupPageTest extends TestCase
         $this->assertNotNull($route);
         $this->assertSame('two-factor-required', $route->uri());
     }
+
+    public function test_layout_defaults_to_the_view_jetstream_actually_publishes(): void
+    {
+        // Jetstream publishes layouts/app.blade.php ({{ $slot }}), never
+        // components/layouts/app.blade.php, which is Livewire's default.
+        $this->assertSame('layouts.app', config('j2fakit.setup_page.layout'));
+    }
+
+    public function test_render_applies_the_configured_layout(): void
+    {
+        $view = (new TwoFactorRequired())->render();
+
+        $this->assertNotNull($view->layoutConfig, 'render() must set a layout');
+        $this->assertSame(
+            'layouts.app',
+            $view->layoutConfig->view,
+            'without this the page dies with "layout view not found"'
+        );
+        $this->assertSame('component', $view->layoutConfig->type, 'Jetstream layouts take {{ $slot }}');
+    }
+
+    public function test_layout_survives_a_published_config_missing_the_key(): void
+    {
+        // mergeConfigFrom() is a shallow array_merge, so a config/j2fakit.php
+        // published BEFORE 'layout' existed replaces the whole setup_page array
+        // and hides the key. The package must still pick a working layout.
+        config()->set('j2fakit.setup_page', [
+            'enabled' => true,
+            'path' => '/two-factor-required',
+            'name' => '2fa.required',
+            'middleware' => ['web', 'auth'],
+        ]);
+
+        $view = (new TwoFactorRequired())->render();
+
+        $this->assertSame(
+            'layouts.app',
+            $view->layoutConfig?->view,
+            'a stale published config must not reintroduce the layout error'
+        );
+    }
+
+    public function test_explicit_null_layout_defers_to_livewire_config(): void
+    {
+        config()->set('j2fakit.setup_page.layout', null);
+
+        $view = (new TwoFactorRequired())->render();
+
+        $this->assertNull(
+            $view->layoutConfig,
+            'an explicit null must hand the choice back to config(livewire.layout)'
+        );
+    }
 }

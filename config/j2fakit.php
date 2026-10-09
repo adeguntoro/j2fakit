@@ -90,6 +90,15 @@ return [
     | the component reads the signed-in user from the session, so dropping
     | 'web' would render it logged out.
     |
+    | 'layout' is the view the page renders inside. A route-mounted Livewire
+    | component otherwise falls back to config('livewire.layout'), whose
+    | default is "components.layouts.app" - a path Jetstream never creates
+    | (it publishes layouts/app.blade.php), which would kill the page with
+    | "Livewire page component layout view not found". Jetstream's layout is
+    | {{ \$slot }}, which is what ->layout() feeds.
+    |
+    | Set 'layout' => null to hand the choice back to config('livewire.layout').
+    |
     */
 
     'setup_page' => [
@@ -97,6 +106,7 @@ return [
         'path'       => '/two-factor-required',
         'name'       => '2fa.required',
         'middleware' => ['web', 'auth'],
+        'layout'     => 'layouts.app',
     ],
 
     /*
