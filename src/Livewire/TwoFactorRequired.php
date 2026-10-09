@@ -176,11 +176,12 @@ class TwoFactorRequired extends JetstreamTwoFactorForm
      */
     public function render()
     {
-        $view = view(
-            view()->exists('livewire.two-factor-required')
-                ? 'livewire.two-factor-required'
-                : 'j2fakit::two-factor-required'
-        );
+        return view('livewire.two-factor-required')->layout('layouts.app');
+        //$view = view(
+        //    view()->exists('livewire.two-factor-required')
+        //        ? 'livewire.two-factor-required'
+        //        : 'j2fakit::two-factor-required'
+        // );
 
         // A route-mounted component renders inside a layout. Without this
         // Livewire falls back to config('livewire.layout'), whose default is
@@ -194,11 +195,11 @@ class TwoFactorRequired extends JetstreamTwoFactorForm
         // whole setup_page array and hides it. Arr::get still returns the
         // default for a missing key, while an explicit null (defer to
         // config('livewire.layout')) is preserved.
-        $layout = config('j2fakit.setup_page.layout', 'layouts.app');
+        // $layout = config('j2fakit.setup_page.layout', 'layouts.app');
 
-        return is_string($layout) && $layout !== ''
-            ? $view->layout($layout)
-            : $view;
+        // return is_string($layout) && $layout !== ''
+        //    ? $view->layout($layout)
+        //    : $view;
     }
 
     /**
